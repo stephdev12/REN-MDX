@@ -1,4 +1,6 @@
-session/
 node_modules/
+session/
 package-lock.json
-
+.env
+.DS_Store
+npm-debug.log
