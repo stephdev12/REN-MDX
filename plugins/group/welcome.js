@@ -1,7 +1,5 @@
-// 👋 Plugin: WELCOME
-// Gère les messages de bienvenue
-
 const { updateGroupSetting, getGroupSettings } = require('../../lib/database');
+const { t } = require('../../lib/language');
 
 module.exports = [
     {
@@ -20,17 +18,17 @@ module.exports = [
             const currentConfig = getGroupSettings(chatId);
 
             if (!setting) {
-                return client.sendMessage(chatId, { text: `> *WELCOME* : ${currentConfig.welcome ? 'on' : 'off'}` }, { quoted: message });
+                return client.sendMessage(chatId, { text: t('group.welcome_init', { status: currentConfig.welcome ? 'on' : 'off' }) }, { quoted: message });
             }
 
             if (setting === 'on') {
                 updateGroupSetting(chatId, 'welcome', true);
-                return client.sendMessage(chatId, { text: '> *WELCOME* : on' }, { quoted: message });
+                return client.sendMessage(chatId, { text: t('group.welcome_on') }, { quoted: message });
             }
 
             if (setting === 'off') {
                 updateGroupSetting(chatId, 'welcome', false);
-                return client.sendMessage(chatId, { text: '> *WELCOME* : off' }, { quoted: message });
+                return client.sendMessage(chatId, { text: t('group.welcome_off') }, { quoted: message });
             }
         }
     },
@@ -48,10 +46,10 @@ module.exports = [
             const chatId = message.key.remoteJid;
             const text = args.join(' ');
 
-            if (!text) return client.sendMessage(chatId, { text: '> *ERREUR* : Message manquant' }, { quoted: message });
+            if (!text) return client.sendMessage(chatId, { text: t('owner.error_arg') }, { quoted: message });
 
             updateGroupSetting(chatId, 'welcomeMessage', text);
-            client.sendMessage(chatId, { text: `> *WELCOME MSG* : Mis à jour.` }, { quoted: message });
+            client.sendMessage(chatId, { text: t('group.welcome_set') }, { quoted: message });
         }
     }
 ];

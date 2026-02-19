@@ -1,7 +1,6 @@
 // 🌐 Plugin: SETLANG
-// Change la langue globale du bot
-
 const { updateSetting } = require('../../lib/database');
+const { t } = require('../../lib/language');
 const fs = require('fs');
 const path = require('path');
 
@@ -12,12 +11,9 @@ module.exports = {
   description: 'Change la langue du bot',
   usage: '.setlang <fr/en>',
   
-  // FLAGS
-  groupOnly: false,
-  ownerOnly: true, 
-  adminOnly: false,
+  ownerOnly: true,
 
-  execute: async (client, message, args, msgOptions) => {
+  execute: async (client, message, args) => {
     const newLang = args[0]?.toLowerCase();
     
     // Lister les langues disponibles
@@ -28,14 +24,14 @@ module.exports = {
 
     if (!availableLangs.includes(newLang)) {
       return client.sendMessage(message.key.remoteJid, { 
-        text: `❌ Langues disponibles : ${availableLangs.join(', ')}\nUsage: .setlang <lang>` 
+        text: t('owner.usage', { usage: `.setlang <${availableLangs.join('/')}>` })
       }, { quoted: message });
     }
 
     updateSetting('lang', newLang);
 
     await client.sendMessage(message.key.remoteJid, { 
-        text: `✅ Langue définie sur : **${newLang.toUpperCase()}**` 
+        text: t('owner.lang_changed', { lang: newLang.toUpperCase() })
     }, { quoted: message });
   }
 };

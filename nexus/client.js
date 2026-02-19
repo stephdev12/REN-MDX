@@ -41,22 +41,27 @@ async function connectToWhatsApp() {
         getMessage: async (key) => { return undefined }
     });
 
-    // 🔗 GESTION DU PAIRING CODE
-    if (!sock.authState.creds.registered && (process.argv.includes('--pairing') || process.argv.includes('--pairing-code'))) {
+    // 🔗 GESTION DU PAIRING CODE (Automatique si pas connecté)
+    if (!sock.authState.creds.registered) {
+        // Attendre un peu que le socket soit prêt
         setTimeout(async () => {
-            let phoneNumber = config.phoneNumber.replace(/[^0-9]/g, '');
+            let phoneNumber = config.phoneNumber?.replace(/[^0-9]/g, '');
+            
             if (!phoneNumber) {
-                console.log(chalk.red("❌ Aucun numéro trouvé dans config.js !"));
-                process.exit(1);
+                console.log(chalk.red("❌ Aucun numéro de pairing défini dans config.js ou .env !"));
+                return;
             }
+
+            console.log(chalk.yellow(`⏳ Demande de pairing pour : ${phoneNumber}`));
+
             try {
                 let code = await sock.requestPairingCode(phoneNumber);
                 code = code?.match(/.{1,4}/g)?.join("-") || code;
-                console.log(chalk.green(`\n✅ Code de jumelage : ${code}\n`));
+                console.log(chalk.green(`\n✅ CODE DE JUMELAGE : ${code}\n`));
             } catch (e) {
-                console.log(chalk.red("Erreur pairing:", e));
+                console.log(chalk.red("❌ Erreur pairing (Vérifiez le numéro) :", e.message));
             }
-        }, 3000);
+        }, 4000);
     }
 
     // 🔄 GESTION DE LA CONNEXION
@@ -80,21 +85,38 @@ async function connectToWhatsApp() {
 
         // --- GESTION DES STATUTS ---
         if (msg.key.remoteJid === 'status@broadcast' && !msg.key.fromMe) {
-            const settings = getSettings();
-            
-            // Auto View
-            if (settings.autostatusview) {
-                await sock.readMessages([msg.key]);
-                console.log(chalk.green(`[STATUS] Vu : ${msg.key.participant}`));
-            }
+            // Sécurité Anti-Crash pour les statuts
+            try {
+                const settings = getSettings();
+                const participant = msg.key.participant;
 
-            // Auto React (💚)
-            if (settings.autostatusreact) {
-                setTimeout(async () => {
-                    await sock.sendMessage('status@broadcast', { 
-                        react: { text: '💚', key: msg.key } 
-                    }, { statusJidList: [msg.key.participant] });
-                }, 2000); // Petit délai pour éviter les erreurs de sync
+                // Vérification de sécurité
+                if (!participant) return;
+
+                // Auto View
+                if (settings.autostatusview) {
+                    await sock.readMessages([msg.key]);
+                    console.log(chalk.green(`[STATUS] Vu : ${participant}`));
+                }
+
+                // Auto React (💚)
+                if (settings.autostatusreact) {
+                    // Délai aléatoire pour éviter le spam machine
+                    const delay = Math.floor(Math.random() * (3000 - 1000 + 1)) + 1000;
+                    
+                    setTimeout(async () => {
+                        try {
+                            await sock.sendMessage('status@broadcast', { 
+                                react: { text: '💚', key: msg.key } 
+                            }, { statusJidList: [participant] });
+                        } catch (reactErr) {
+                            // On ignore silencieusement les erreurs de réaction (souvent dues à la confidentialité)
+                            // console.log('Erreur React Statut (Ignoré)');
+                        }
+                    }, delay); 
+                }
+            } catch (statusErr) {
+                console.error(chalk.yellow(`[STATUS ERROR] ${statusErr.message} (Bot continue)`));
             }
             return; // Stop pour les statuts
         }

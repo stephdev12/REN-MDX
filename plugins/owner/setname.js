@@ -1,5 +1,6 @@
 // ⚙️ Plugin: SETNAME
 const { updateSetting } = require('../../lib/database');
+const { t } = require('../../lib/language');
 
 module.exports = {
   name: 'setname',
@@ -12,9 +13,9 @@ module.exports = {
 
   execute: async (client, message, args) => {
     const newName = args.join(' ');
-    if (!newName) return client.sendMessage(message.key.remoteJid, { text: '> *ERREUR* : Nom manquant' }, { quoted: message });
+    if (!newName) return client.sendMessage(message.key.remoteJid, { text: t('owner.error_arg') }, { quoted: message });
 
     updateSetting('botName', newName);
-    await client.sendMessage(message.key.remoteJid, { text: `> *BOT NAME* : ${newName}` }, { quoted: message });
+    await client.sendMessage(message.key.remoteJid, { text: t('owner.name_changed', { name: newName }) }, { quoted: message });
   }
 };

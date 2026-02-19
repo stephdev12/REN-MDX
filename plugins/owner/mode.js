@@ -1,7 +1,6 @@
 // 👑 Plugin: MODE
-// Change le mode d'accès du bot (Public / Privé)
-
 const { updateSetting } = require('../../lib/database');
+const { t } = require('../../lib/language');
 
 module.exports = {
   name: 'mode',
@@ -10,22 +9,19 @@ module.exports = {
   description: 'Change le mode du bot (public/private)',
   usage: '.mode <public/private>',
   
-  // FLAGS
-  groupOnly: false,
-  ownerOnly: true, // IMPORTANT: Seul l'owner peut changer le mode
-  adminOnly: false,
+  ownerOnly: true,
 
-  execute: async (client, message, args, msgOptions) => {
+  execute: async (client, message, args) => {
     const newMode = args[0]?.toLowerCase();
 
     if (!['public', 'private'].includes(newMode)) {
       return client.sendMessage(message.key.remoteJid, { 
-        text: '❌ Usage: .mode <public/private>' 
+        text: t('owner.usage', { usage: '.mode <public/private>' })
       }, { quoted: message });
     }
 
     updateSetting('mode', newMode);
 
-    await client.sendMessage(message.key.remoteJid, { text: `> *MODE* : ${newMode}` }, { quoted: message });
+    await client.sendMessage(message.key.remoteJid, { text: t('owner.mode_changed', { mode: newMode }) }, { quoted: message });
   }
 };

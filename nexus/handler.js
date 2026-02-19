@@ -3,9 +3,11 @@ const path = require('path');
 const fs = require('fs');
 const config = require('../config');
 const chalk = require('chalk');
-const { isAdmin, isOwner: checkIsOwner, normalizeJid } = require('../lib/authHelper');
+const { isAdmin, isOwner: checkIsOwner, isSudo, normalizeJid } = require('../lib/authHelper');
 const { buildMessageOptions } = require('../lib/utils');
 const { getSettings } = require('../lib/database');
+const { getRequest, deleteRequest } = require('../lib/store'); // Import Store
+const { t } = require('../lib/language'); // Import t()
 
 // Chargement des plugins
 const plugins = {};
@@ -64,6 +66,22 @@ async function messageHandler(sock, m) {
 
         const body = message.message?.conversation || message.message?.extendedTextMessage?.text || message.message?.imageMessage?.caption || "";
         
+        // --- 1. GESTION DES RÉPONSES INTERACTIVES (Store) ---
+        // On vérifie si l'utilisateur répond à une commande en attente (ex: choix play)
+        const senderNum = normalizeJid(sender);
+        const pendingRequest = getRequest(senderNum, chatId);
+
+        if (pendingRequest && !body.startsWith(config.prefix)) {
+            // Si une requête est en attente et que ce n'est pas une nouvelle commande
+            // On délègue au plugin responsable
+            const plugin = plugins[pendingRequest.command];
+            if (plugin && plugin.handleResponse) {
+                await plugin.handleResponse(sock, message, body, pendingRequest);
+                return; // Stop ici, on a traité la réponse
+            }
+        }
+
+        // --- 2. GESTION DES COMMANDES CLASSIQUES ---
         // --- PRÉFIXE DYNAMIQUE ---
         const settings = getSettings();
         const prefix = settings.prefix || config.prefix;
@@ -78,9 +96,11 @@ async function messageHandler(sock, m) {
             const plugin = plugins[pluginName];
             const senderNum = normalizeJid(sender);
             const isOwner = checkIsOwner(sock, message);
+            const isUserSudo = isSudo(sender);
 
             // --- GESTION DU MODE PUBLIC/PRIVÉ ---
-            if (settings.mode === 'private' && !isOwner) {
+            // Si mode privé : Owner OU Sudo autorisé
+            if (settings.mode === 'private' && !isOwner && !isUserSudo) {
                 return; // Ignorer silencieusement
             }
 
@@ -93,14 +113,14 @@ async function messageHandler(sock, m) {
 
             // 2. Group Only
             if (plugin.groupOnly && !isGroup) {
-                return sock.sendMessage(chatId, { text: "> *ERREUR* : group only" }, { quoted: message });
+                return sock.sendMessage(chatId, { text: t('system.group_only') }, { quoted: message });
             }
 
             // 3. Admin Only
             if (plugin.adminOnly && isGroup) {
                 const userIsAdmin = await isAdmin(sock, chatId, sender);
                 if (!userIsAdmin && !isOwner) {
-                    return sock.sendMessage(chatId, { text: "> *ERREUR* : admin only" }, { quoted: message });
+                    return sock.sendMessage(chatId, { text: t('system.admin_only') }, { quoted: message });
                 }
             }
 

@@ -2,6 +2,7 @@
 // Gère les automatisations globales (Status, Présence)
 
 const { updateSetting, getSettings } = require('../../lib/database');
+const { t } = require('../../lib/language');
 
 const AUTOMATIONS = [
     { cmd: 'autostatusview', name: 'AUTO-STATUS-VIEW', desc: 'Vue auto des statuts' },
@@ -31,21 +32,21 @@ const commands = AUTOMATIONS.map(auto => ({
 
         if (!setting) {
             return client.sendMessage(message.key.remoteJid, { 
-                text: `> *${auto.name}* : ${currentConfig[auto.cmd] ? 'on' : 'off'}` 
+                text: t('owner.auto_status', { cmd: auto.name, status: currentConfig[auto.cmd] ? 'on' : 'off' })
             }, { quoted: message });
         }
 
         if (setting === 'on') {
             updateSetting(auto.cmd, true);
-            return client.sendMessage(message.key.remoteJid, { text: `> *${auto.name}* : on` }, { quoted: message });
+            return client.sendMessage(message.key.remoteJid, { text: t('owner.auto_on', { cmd: auto.name }) }, { quoted: message });
         }
 
         if (setting === 'off') {
             updateSetting(auto.cmd, false);
-            return client.sendMessage(message.key.remoteJid, { text: `> *${auto.name}* : off` }, { quoted: message });
+            return client.sendMessage(message.key.remoteJid, { text: t('owner.auto_off', { cmd: auto.name }) }, { quoted: message });
         }
 
-        client.sendMessage(message.key.remoteJid, { text: `> *USAGE* : .${auto.cmd} <on/off>` }, { quoted: message });
+        client.sendMessage(message.key.remoteJid, { text: t('owner.usage', { usage: `.${auto.cmd} <on/off>` }) }, { quoted: message });
     }
 }));
 

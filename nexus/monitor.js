@@ -1,6 +1,7 @@
 // 🛡️ NEXUS - MONITOR (PROTECTIONS COMPLÈTES)
 const { getGroupSettings } = require('../lib/database');
 const { isAdmin, normalizeJid } = require('../lib/authHelper');
+const { t } = require('../lib/language');
 
 const LINK_REGEX = /(https?:\/\/)?(chat\.whatsapp\.com\/[0-9A-Za-z]{20,24}|wa\.me\/\d+)/i;
 
@@ -11,50 +12,37 @@ const REACT_EMOJIS = ['👍', '❤️', '😂', '😮', '🙏', '🔥', '✨', '
 async function monitorMessage(sock, m) {
     try {
         const message = m.messages[0];
-        // NOTE: On ne return PAS si fromMe, car l'owner/bot peut vouloir tester (sauf s'il est immunisé plus bas)
         if (!message) return;
 
         const chatId = message.key.remoteJid;
         if (!chatId.endsWith('@g.us')) return;
 
         const sender = message.key.participant || message.participant;
-        // Si fromMe, l'expéditeur est le bot lui-même
-        if (message.key.fromMe) return; // Le bot ne se censure pas lui-même
+        if (message.key.fromMe) return;
 
         const body = message.message?.conversation || message.message?.extendedTextMessage?.text || message.message?.imageMessage?.caption || "";
         
-        // Charger la config du groupe
         const settings = getGroupSettings(chatId);
-        
-        // DEBUG LOG (À supprimer en prod si trop bavard)
-        // console.log(`[MONITOR] ${sender} in ${chatId}: ${body.substring(0, 20)}...`);
-
-        // Les admins sont immunisés contre TOUTES les protections textuelles
         const userIsAdmin = await isAdmin(sock, chatId, sender);
         
         // --- AUTOREACT ---
         if (settings.autoreact && !message.key.fromMe) {
-            // Réagit aléatoirement
             const randomEmoji = REACT_EMOJIS[Math.floor(Math.random() * REACT_EMOJIS.length)];
             await sock.sendMessage(chatId, { react: { text: randomEmoji, key: message.key } });
         }
 
-        if (userIsAdmin) {
-            // console.log(`[MONITOR] Ignored (Admin): ${sender}`);
-            return;
-        }
+        if (userIsAdmin) return;
 
         // --- A. ANTILINK ---
         if (settings.antilink && LINK_REGEX.test(body)) {
-            console.log(`[ANTILINK] DETECTED from ${sender}`);
             await sock.sendMessage(chatId, { delete: message.key });
             if (settings.antilinkAction === 'kick') {
                 await sock.groupParticipantsUpdate(chatId, [sender], 'remove');
-                await sock.sendMessage(chatId, { text: `> *ANTILINK* : @${sender.split('@')[0]} retiré.` }, { mentions: [sender] });
+                await sock.sendMessage(chatId, { text: t('group.link_kick', { user: sender.split('@')[0] }) }, { mentions: [sender] });
             } else {
-                await sock.sendMessage(chatId, { text: `> *ANTILINK* : Lien interdit supprimé.` });
+                await sock.sendMessage(chatId, { text: t('group.link_detected') });
             }
-            return; // Stop processing
+            return;
         }
 
         // --- B. ANTI-BADWORD ---
@@ -62,45 +50,39 @@ async function monitorMessage(sock, m) {
             const isBad = settings.badwords.some(word => body.toLowerCase().includes(word.toLowerCase()));
             if (isBad) {
                 await sock.sendMessage(chatId, { delete: message.key });
-                await sock.sendMessage(chatId, { text: `> *ANTI-BADWORD* : Langage inapproprié.` });
+                await sock.sendMessage(chatId, { text: t('group.badword_detected') });
                 return;
             }
         }
 
         // --- C. ANTI-TAG ---
-        // Vérifie si le message contient beaucoup de mentions (ex: > 5)
         const mentions = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
         if (settings.antitag && mentions.length > 5) {
             await sock.sendMessage(chatId, { delete: message.key });
             await sock.groupParticipantsUpdate(chatId, [sender], 'remove');
-            await sock.sendMessage(chatId, { text: `> *ANTITAG* : Stop tag.` });
+            await sock.sendMessage(chatId, { text: t('group.tag_detected') });
             return;
         }
 
-        // --- D. ANTI-MEDIA (Images/Vidéos/Stickers) ---
-        // Vérifie le type de message
+        // --- D. ANTI-MEDIA ---
         if (settings.antimedia && message.message) {
             const msgType = Object.keys(message.message)[0];
             const mediaTypes = ['imageMessage', 'videoMessage', 'stickerMessage', 'audioMessage', 'documentMessage'];
             if (mediaTypes.includes(msgType)) {
                 await sock.sendMessage(chatId, { delete: message.key });
-                // Pas de message de notif pour éviter le spam si bombardement d'images
                 return;
             }
         }
 
         // --- E. ANTI-TRANSFERT ---
-        // Vérifie si le message est transféré
         const contextInfo = message.message?.extendedTextMessage?.contextInfo || message.message?.imageMessage?.contextInfo || message.message?.videoMessage?.contextInfo;
         if (settings.antitransfert && contextInfo?.isForwarded) {
              await sock.sendMessage(chatId, { delete: message.key });
-             await sock.sendMessage(chatId, { text: `> *ANTI-TRANSFERT* : Interdit.` });
+             await sock.sendMessage(chatId, { text: t('group.transfer_detected') });
              return;
         }
 
-        // --- F. ANTI-SPAM (Basique) ---
-        // Pour une vraie logique antispam, il faudrait un cache en mémoire des derniers messages par user
-        // Ici, on bloque juste les messages trop longs (> 3000 caractères) qui font laguer
+        // --- F. ANTI-SPAM ---
         if (settings.antispam && body.length > 3000) {
             await sock.sendMessage(chatId, { delete: message.key });
             await sock.groupParticipantsUpdate(chatId, [sender], 'remove');
@@ -120,27 +102,20 @@ async function monitorGroupUpdate(sock, update) {
         
         // --- G. ANTI-PROMOTE ---
         if (settings.antipromote && action === 'promote') {
-            // On cherche QUI a fait l'action (l'auteur)
-            // Malheureusement, l'événement group-participants.update ne donne pas toujours l'auteur (author)
-            // Sauf si on écoute 'notify' sur certains cas, mais Baileys le donne souvent dans 'author' si dispo
             const author = update.author || update.actor; 
             if (!author) return;
 
-            // Si l'auteur est le bot lui-même, on ignore
             const botId = normalizeJid(sock.user.id);
             if (normalizeJid(author) === botId) return;
 
-            // Si l'auteur est Owner, on ignore
-            // (Nécessite d'importer config pour vérifier owner)
             const config = require('../config');
             if (config.ownerNumber.some(n => author.includes(n))) return;
 
-            // Sinon, on sanctionne : On rétrograde le nouveau promu + On rétrograde l'auteur (si possible)
             for (const participant of participants) {
                 await sock.groupParticipantsUpdate(id, [participant], 'demote');
             }
             await sock.groupParticipantsUpdate(id, [author], 'demote');
-            await sock.sendMessage(id, { text: `> *ANTI-PROMOTE* : Action non autorisée.` });
+            await sock.sendMessage(id, { text: t('group.promote_detected') });
         }
 
         // --- H. ANTI-DEMOTE ---
@@ -154,12 +129,11 @@ async function monitorGroupUpdate(sock, update) {
             const config = require('../config');
             if (config.ownerNumber.some(n => author.includes(n))) return;
 
-            // On repromote la victime + On rétrograde l'auteur
             for (const participant of participants) {
                 await sock.groupParticipantsUpdate(id, [participant], 'promote');
             }
             await sock.groupParticipantsUpdate(id, [author], 'demote');
-            await sock.sendMessage(id, { text: `> *ANTI-DEMOTE* : Action non autorisée.` });
+            await sock.sendMessage(id, { text: t('group.demote_detected') });
         }
 
         // --- I. WELCOME ---

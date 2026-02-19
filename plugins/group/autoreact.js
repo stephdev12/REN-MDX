@@ -1,7 +1,5 @@
-// 🎭 Plugin: AUTOREACT
-// Réaction automatique aux messages du groupe
-
 const { updateGroupSetting, getGroupSettings } = require('../../lib/database');
+const { t } = require('../../lib/language');
 
 module.exports = {
     name: 'autoreact',
@@ -19,17 +17,17 @@ module.exports = {
         const currentConfig = getGroupSettings(chatId);
 
         if (!setting) {
-            return client.sendMessage(chatId, { text: `> *AUTOREACT* : ${currentConfig.autoreact ? 'on' : 'off'}` }, { quoted: message });
+            return client.sendMessage(chatId, { text: t('group.autoreact_status', { status: currentConfig.autoreact ? 'on' : 'off' }) }, { quoted: message });
         }
 
         if (setting === 'on') {
             updateGroupSetting(chatId, 'autoreact', true);
-            return client.sendMessage(chatId, { text: '> *AUTOREACT* : on' }, { quoted: message });
+            return client.sendMessage(chatId, { text: t('group.autoreact_on') }, { quoted: message });
         }
 
         if (setting === 'off') {
             updateGroupSetting(chatId, 'autoreact', false);
-            return client.sendMessage(chatId, { text: '> *AUTOREACT* : off' }, { quoted: message });
+            return client.sendMessage(chatId, { text: t('group.autoreact_off') }, { quoted: message });
         }
     }
 };

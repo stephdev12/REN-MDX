@@ -4,6 +4,7 @@ const path = require('path');
 const config = require('../../config');
 const { getSettings } = require('../../lib/database');
 const { styleText, formatUptime } = require('../../lib/functions');
+const { t } = require('../../lib/language');
 
 const MENU_IMAGES = [
     "https://i.postimg.cc/mDhT0csk/5d815d55908eafd04d29d88e5146a0f9.jpg",
@@ -44,7 +45,11 @@ module.exports = {
         const pluginsDir = path.join(__dirname, '../../plugins');
         const categories = fs.readdirSync(pluginsDir);
         
-        const greeting = lang === 'fr' ? 'Salut' : 'Hello';
+const { t } = require('../../lib/language');
+
+// ... (code intermédiaire identique)
+
+        const greeting = lang === 'fr' ? t('menu.greet_fr') : t('menu.greet_en');
 
         // Construction du menu avec styleText() appliqué aux corps
         let caption = `‎❏ ${botName} ❏\n`
@@ -52,8 +57,8 @@ module.exports = {
             + `‎┃${styleText(greeting)} ${username}\n`
             + `‎╰━━━━━━━━━━━━━━━✦\n‎\n`
             + `‎━━━━━━━━━━━━━━✦\n`
-            + `‎❍ ${styleText('uptime')} : ${formatUptime(process.uptime())}\n`
-            + `‎❍ ${styleText('prefix')} : ${prefix}\n`
+            + `‎❍ ${styleText(t('menu.uptime'))} : ${formatUptime(process.uptime())}\n`
+            + `‎❍ ${styleText(t('menu.prefix'))} : ${prefix}\n`
             + `‎━━━━━━━━━━━━━━✦\n‎`;
 
         categories.forEach(category => {

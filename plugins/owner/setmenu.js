@@ -1,7 +1,6 @@
 // 🖼️ Plugin: SETMENUIMAGE
-// Configure les images du menu
-
 const { updateSetting } = require('../../lib/database');
+const { t } = require('../../lib/language');
 
 module.exports = {
     name: 'setmenuimage',
@@ -13,15 +12,15 @@ module.exports = {
     ownerOnly: true,
 
     execute: async (client, message, args) => {
-        // TODO: Support image upload via reply (complex for now, starting with URLs)
-        if (args.length === 0) return client.sendMessage(message.key.remoteJid, { text: '> *ERREUR* : URLs manquantes' }, { quoted: message });
+        if (args.length === 0) return client.sendMessage(message.key.remoteJid, { text: t('owner.error_arg') }, { quoted: message });
 
-        // Filtrer les URLs valides (basique)
         const urls = args.filter(arg => arg.startsWith('http'));
         
-        if (urls.length === 0) return client.sendMessage(message.key.remoteJid, { text: '> *ERREUR* : Aucune URL valide' }, { quoted: message });
+        if (urls.length === 0) return client.sendMessage(message.key.remoteJid, { text: t('tools.ssweb_error') }, { quoted: message });
 
         updateSetting('menuImages', urls);
-        await client.sendMessage(message.key.remoteJid, { text: `> *MENU IMAGES* : ${urls.length} images mises à jour.` }, { quoted: message });
+        await client.sendMessage(message.key.remoteJid, { 
+            text: t('owner.menu_img_changed', { count: urls.length })
+        }, { quoted: message });
     }
 };

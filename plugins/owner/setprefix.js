@@ -1,5 +1,6 @@
 // ⚙️ Plugin: SETPREFIX
 const { updateSetting } = require('../../lib/database');
+const { t } = require('../../lib/language');
 
 module.exports = {
   name: 'setprefix',
@@ -12,9 +13,9 @@ module.exports = {
 
   execute: async (client, message, args) => {
     const newPrefix = args[0];
-    if (!newPrefix) return client.sendMessage(message.key.remoteJid, { text: '> *ERREUR* : Préfixe manquant' }, { quoted: message });
+    if (!newPrefix) return client.sendMessage(message.key.remoteJid, { text: t('owner.error_arg') }, { quoted: message });
 
     updateSetting('prefix', newPrefix);
-    await client.sendMessage(message.key.remoteJid, { text: `> *PREFIX* : ${newPrefix}` }, { quoted: message });
+    await client.sendMessage(message.key.remoteJid, { text: t('owner.prefix_changed', { prefix: newPrefix }) }, { quoted: message });
   }
 };
