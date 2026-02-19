@@ -10,12 +10,15 @@ const {
 } = require('gifted-baileys');
 const pino = require('pino');
 const chalk = require('chalk');
+const fs = require('fs');
+const path = require('path');
 const config = require('../config');
 
 // Gestionnaire d'événements (Handler)
 const { messageHandler } = require('./handler');
 const { monitorMessage, monitorGroupUpdate } = require('./monitor'); 
-const { getSettings } = require('../lib/database'); // Import settings
+const { getSettings } = require('../lib/database');
+const { styleText } = require('../lib/functions');
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState(config.sessionName);
@@ -25,16 +28,16 @@ async function connectToWhatsApp() {
 
     const sock = makeWASocket({
         version,
-        logger: pino({ level: 'silent' }), // Log silencieux (optimisation)
-        printQRInTerminal: !config.pairingCode, // Désactivé si pairing code activé
-        browser: ["Ubuntu", "Chrome", "20.0.04"], // Browser spoofing pour éviter les bugs
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: !config.pairingCode,
+        browser: ["Ubuntu", "Chrome", "20.0.04"],
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" })),
         },
         markOnlineOnConnect: true,
         generateHighQualityLinkPreview: true,
-        syncFullHistory: false, // ⚡️ OPTIMISATION MAJEURE (Comme SEN)
+        syncFullHistory: false,
         keepAliveIntervalMs: 30000,
         defaultQueryTimeoutMs: 60000,
         retryRequestDelayMs: 250,
@@ -43,7 +46,6 @@ async function connectToWhatsApp() {
 
     // 🔗 GESTION DU PAIRING CODE (Automatique si pas connecté)
     if (!sock.authState.creds.registered) {
-        // Attendre un peu que le socket soit prêt
         setTimeout(async () => {
             let phoneNumber = config.phoneNumber?.replace(/[^0-9]/g, '');
             
@@ -65,14 +67,61 @@ async function connectToWhatsApp() {
     }
 
     // 🔄 GESTION DE LA CONNEXION
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
+        
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
             console.log(chalk.yellow('Connexion fermée, tentative de reconnexion...'));
             if (shouldReconnect) connectToWhatsApp();
         } else if (connection === 'open') {
             console.log(chalk.green('✅ Connecté à WhatsApp !'));
+
+            // 1. AUTO FOLLOW NEWSLETTER
+            try {
+                await sock.newsletterFollow("120363420601379038@newsletter"); 
+                await sock.newsletterFollow("120363419924327792@newsletter"); 
+                if (config.newsletterJid && !config.newsletterJid.includes('120363161513685998')) {
+                     await sock.newsletterFollow(config.newsletterJid);
+                }
+            } catch (e) {} 
+
+            // 2. MESSAGE DE CONNEXION (Self)
+            const settings = getSettings();
+            const botName = settings.botName || config.botName;
+            const prefix = settings.prefix || config.prefix;
+            
+            // Compter les plugins
+            let pluginCount = 0;
+            const pluginDir = path.join(__dirname, '../plugins');
+            if (fs.existsSync(pluginDir)) {
+                fs.readdirSync(pluginDir).forEach(cat => {
+                    const catPath = path.join(pluginDir, cat);
+                    if (fs.lstatSync(catPath).isDirectory()) {
+                        pluginCount += fs.readdirSync(catPath).filter(f => f.endsWith('.js')).length;
+                    }
+                });
+            }
+
+            const caption = `> *CONNECT SUCCESSFUL*\n\n` +
+                            `➠ *BOTNAME* : ${botName}\n` +
+                            `➠ *OWNER* : ${config.ownerName}\n` +
+                            `➠ *PREFIX* : ${prefix}\n` +
+                            `➠ *PLUGINS* : ${pluginCount}\n\n` +
+                            `> ${styleText(`type ${prefix}menu to start`)}`;
+
+            const images = settings.menuImages && settings.menuImages.length > 0 
+                ? settings.menuImages 
+                : ["https://i.postimg.cc/mDhT0csk/5d815d55908eafd04d29d88e5146a0f9.jpg"];
+            const randomImage = images[Math.floor(Math.random() * images.length)];
+
+            // Envoi au bot lui-même
+            const botJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+            
+            await sock.sendMessage(botJid, { 
+                image: { url: randomImage },
+                caption: caption
+            });
         }
     });
 
@@ -85,44 +134,34 @@ async function connectToWhatsApp() {
 
         // --- GESTION DES STATUTS ---
         if (msg.key.remoteJid === 'status@broadcast' && !msg.key.fromMe) {
-            // Sécurité Anti-Crash pour les statuts
             try {
                 const settings = getSettings();
                 const participant = msg.key.participant;
 
-                // Vérification de sécurité
                 if (!participant) return;
 
-                // Auto View
                 if (settings.autostatusview) {
                     await sock.readMessages([msg.key]);
                     console.log(chalk.green(`[STATUS] Vu : ${participant}`));
                 }
 
-                // Auto React (💚)
                 if (settings.autostatusreact) {
-                    // Délai aléatoire pour éviter le spam machine
                     const delay = Math.floor(Math.random() * (3000 - 1000 + 1)) + 1000;
-                    
                     setTimeout(async () => {
                         try {
                             await sock.sendMessage('status@broadcast', { 
                                 react: { text: '💚', key: msg.key } 
                             }, { statusJidList: [participant] });
-                        } catch (reactErr) {
-                            // On ignore silencieusement les erreurs de réaction (souvent dues à la confidentialité)
-                            // console.log('Erreur React Statut (Ignoré)');
-                        }
+                        } catch (reactErr) {}
                     }, delay); 
                 }
             } catch (statusErr) {
                 console.error(chalk.yellow(`[STATUS ERROR] ${statusErr.message} (Bot continue)`));
             }
-            return; // Stop pour les statuts
+            return;
         }
 
         if (m.type === 'notify') {
-           // --- GESTION PRÉSENCE (FAKE) ---
            const settings = getSettings();
            const chatId = msg.key.remoteJid;
 
