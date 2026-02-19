@@ -71,9 +71,21 @@ async function connectToWhatsApp() {
         const { connection, lastDisconnect } = update;
         
         if (connection === 'close') {
-            const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log(chalk.yellow('Connexion fermée, tentative de reconnexion...'));
-            if (shouldReconnect) connectToWhatsApp();
+            const statusCode = lastDisconnect.error?.output?.statusCode;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+            
+            console.log(chalk.yellow(`Connexion fermée (Code: ${statusCode}), Reconnexion: ${shouldReconnect}`));
+            
+            if (statusCode === DisconnectReason.loggedOut) {
+                console.log(chalk.red("⛔ Session invalide. Veuillez supprimer le dossier 'session' et scanner à nouveau."));
+                // Optionnel : fs.rmSync(config.sessionName, { recursive: true, force: true });
+                process.exit(1);
+            }
+
+            if (shouldReconnect) {
+                // Attendre un peu avant de reconnecter pour éviter le spam
+                setTimeout(connectToWhatsApp, 3000);
+            }
         } else if (connection === 'open') {
             console.log(chalk.green('✅ Connecté à WhatsApp !'));
 
