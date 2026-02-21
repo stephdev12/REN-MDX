@@ -57,12 +57,22 @@ module.exports = [
         description: 'Récupère la photo de profil',
         usage: '.getpp (@user)',
         execute: async (client, message, args) => {
-            const target = message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] || message.key.remoteJid;
+            // Cible : Cité > Mentionné > Expéditeur (Soi-même) > Groupe (si arg 'group')
+            const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage?.participant;
+            const mentioned = message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+            const sender = message.key.participant || message.key.remoteJid;
+            
+            let target = quoted || mentioned || sender;
+            
+            // Si l'utilisateur tape ".getpp group", on prend le groupe
+            if (args[0] === 'group') target = message.key.remoteJid;
+
             try {
                 const pp = await client.profilePictureUrl(target, 'image');
                 await client.sendMessage(message.key.remoteJid, { image: { url: pp } }, { quoted: message });
             } catch (e) {
-                client.sendMessage(message.key.remoteJid, { text: t('tools.no_pp') });
+                // Fallback: Image par défaut si pas de PP
+                await client.sendMessage(message.key.remoteJid, { text: t('tools.no_pp') });
             }
         }
     },

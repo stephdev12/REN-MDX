@@ -103,14 +103,23 @@ async function connectToWhatsApp() {
             const botName = settings.botName || config.botName;
             const prefix = settings.prefix || config.prefix;
             
-            // Compter les plugins
+            // Compter les plugins (Correction: charge les fichiers pour compter les tableaux)
             let pluginCount = 0;
             const pluginDir = path.join(__dirname, '../plugins');
             if (fs.existsSync(pluginDir)) {
                 fs.readdirSync(pluginDir).forEach(cat => {
                     const catPath = path.join(pluginDir, cat);
                     if (fs.lstatSync(catPath).isDirectory()) {
-                        pluginCount += fs.readdirSync(catPath).filter(f => f.endsWith('.js')).length;
+                        fs.readdirSync(catPath).filter(f => f.endsWith('.js')).forEach(file => {
+                            try {
+                                const plugin = require(path.join(catPath, file));
+                                if (Array.isArray(plugin)) {
+                                    pluginCount += plugin.length;
+                                } else if (plugin.name) {
+                                    pluginCount++;
+                                }
+                            } catch (e) {}
+                        });
                     }
                 });
             }

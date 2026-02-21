@@ -93,7 +93,12 @@ module.exports = [
             }, { quoted: message });
 
             // Sauvegarde du contexte (ID Utilisateur + Chat ID)
-            const userId = normalizeJid(message.key.participant || message.key.remoteJid);
+            const userId = message.key.fromMe 
+                ? normalizeJid(client.user?.id || "")
+                : normalizeJid(message.key.participant || message.key.remoteJid);
+
+            console.log(`[DEBUG SAVE] Saving for: ${userId}`);
+
             saveRequest(userId, message.key.remoteJid, {
                 command: 'play',
                 url: video.url,

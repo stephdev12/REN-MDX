@@ -54,35 +54,56 @@ async function messageHandler(sock, m) {
         const message = m.messages[0];
         if (!message) return;
 
+        // DEBUG : Voir ce qui arrive (à supprimer plus tard)
+        // if (message.key.fromMe) console.log(`[FROM ME] Body: ${message.message?.conversation}`);
+
+        // On accepte les messages du bot s'ils sont du texte (pour les choix interactifs)
         if (message.key.fromMe && !message.message?.conversation && !message.message?.extendedTextMessage) return;
 
         const chatId = message.key.remoteJid;
         const isGroup = chatId.endsWith('@g.us');
         
-        let sender = isGroup ? (message.key.participant || message.participant) : chatId;
+        // Détermination propre de l'expéditeur
+        let sender;
         if (message.key.fromMe) {
+            // Pour le bot, on prend l'ID de base sans suffixe (:device)
             sender = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+        } else {
+            sender = isGroup ? (message.key.participant || message.participant) : chatId;
         }
 
         const body = message.message?.conversation || message.message?.extendedTextMessage?.text || message.message?.imageMessage?.caption || "";
         
         // --- 1. GESTION DES RÉPONSES INTERACTIVES (Store) ---
-        // On vérifie si l'utilisateur répond à une commande en attente (ex: choix play)
-        const senderNum = normalizeJid(sender);
+        let senderNum;
+        if (message.key.fromMe) {
+            senderNum = normalizeJid(sock.user?.id || "");
+        } else {
+            senderNum = normalizeJid(sender);
+        }
+        
+        console.log(`[DEBUG STORE] Sender: ${senderNum} | Chat: ${chatId}`);
         const pendingRequest = getRequest(senderNum, chatId);
+        console.log(`[DEBUG STORE] Result:`, pendingRequest ? "TROUVÉ" : "NULL");
 
-        if (pendingRequest && !body.startsWith(config.prefix)) {
-            // Si une requête est en attente et que ce n'est pas une nouvelle commande
-            // On délègue au plugin responsable
-            const plugin = plugins[pendingRequest.command];
-            if (plugin && plugin.handleResponse) {
-                await plugin.handleResponse(sock, message, body, pendingRequest);
-                return; // Stop ici, on a traité la réponse
+        if (pendingRequest) {
+            // Si c'est une nouvelle commande (commence par .), on annule la requête en cours
+            const settings = getSettings();
+            const prefix = settings.prefix || config.prefix;
+            
+            if (body.startsWith(prefix)) {
+                deleteRequest(senderNum, chatId);
+            } else {
+                // Sinon, on traite la réponse
+                const plugin = plugins[pendingRequest.command];
+                if (plugin && plugin.handleResponse) {
+                    await plugin.handleResponse(sock, message, body, pendingRequest);
+                    return; // Stop ici, on a traité la réponse
+                }
             }
         }
 
         // --- 2. GESTION DES COMMANDES CLASSIQUES ---
-        // --- PRÉFIXE DYNAMIQUE ---
         const settings = getSettings();
         const prefix = settings.prefix || config.prefix;
 
