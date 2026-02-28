@@ -25,14 +25,12 @@ module.exports = {
 
             let replyText = `> *FANCY TEXT*\n\n`;
             
-            // On limite à 10 styles pour ne pas faire un message trop long
-            const stylesToDisplay = data.results.slice(0, 10);
-            
-            stylesToDisplay.forEach((item, index) => {
+            // Affiche tous les styles
+            data.results.forEach((item, index) => {
                 replyText += `*${index + 1}.* ${item.result}\n`;
             });
 
-            await client.sendMessage(message.key.remoteJid, { text: replyText }, { quoted: message });
+            await client.sendMessage(message.key.remoteJid, { text: replyText.trim() }, { quoted: message });
 
         } catch (e) {
             console.error(e);
