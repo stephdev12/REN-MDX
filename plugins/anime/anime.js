@@ -87,35 +87,39 @@ module.exports = [
         name: 'kusonime',
         aliases: ['kuso'],
         category: 'anime',
-        description: 'Infos récentes Kusonime',
-        usage: '.kusonime',
+        description: 'Recherche ou Infos récentes Kusonime',
+        usage: '.kusonime [recherche]',
 
         execute: async (client, message, args) => {
             try {
                 await client.sendMessage(message.key.remoteJid, { react: { text: '📺', key: message.key } });
 
-                const { data } = await axios.get(`https://api.giftedtech.co.ke/api/anime/kusonime-info?apikey=${API_KEY}`);
+                const query = args.join(' ');
+                let apiUrl = `https://api.giftedtech.co.ke/api/anime/kusonime-info?apikey=${API_KEY}`;
+                
+                if (query) {
+                    apiUrl = `https://api.giftedtech.co.ke/api/anime/kusonime-search?apikey=${API_KEY}&query=${encodeURIComponent(query)}`;
+                }
+
+                const { data } = await axios.get(apiUrl);
                 
                 if (!data.success || !data.result || data.result.length === 0) throw new Error('API Error');
 
-                // On prend les 5 premiers résultats pour ne pas spammer
-                const animes = data.result.slice(0, 5);
+                // On prend les 3 premiers résultats pour ne pas spammer
+                const animes = data.result.slice(0, 3);
                 
-                let text = `> *KUSONIME - SORTIES RÉCENTES*\n\n`;
-                animes.forEach((anime, index) => {
-                    text += `*${index + 1}. ${anime.title}*\n`;
-                    text += `🎭 Genres : ${anime.genres.join(', ')}\n`;
-                    text += `🕒 Sortie : ${anime.releaseTime}\n`;
-                    text += `🔗 ${anime.url}\n\n`;
-                });
+                for (const anime of animes) {
+                    let caption = `> *KUSONIME ${query ? 'SEARCH' : 'LATEST'}*\n\n`;
+                    caption += `*Titre* : ${anime.title}\n`;
+                    caption += `🎭 Genres : ${anime.genres.join(', ')}\n`;
+                    caption += `🕒 Sortie : ${anime.releaseTime}\n`;
+                    caption += `🔗 ${anime.url}`;
 
-                // On utilise le thumbnail du premier anime
-                const firstThumbnail = animes[0].thumbnail;
-
-                await client.sendMessage(message.key.remoteJid, { 
-                    image: { url: firstThumbnail },
-                    caption: text.trim() 
-                }, { quoted: message });
+                    await client.sendMessage(message.key.remoteJid, { 
+                        image: { url: anime.thumbnail },
+                        caption: caption
+                    }, { quoted: message });
+                }
 
             } catch (error) {
                 console.error("Kusonime Error:", error.message);
