@@ -2,6 +2,7 @@
 const axios = require('axios');
 const { uploadMedia } = require('../../lib/mediaUpload');
 const { t } = require('../../lib/language');
+const { extractMedia } = require('../../lib/utils');
 const API_KEY = 'gifted';
 
 module.exports = [
@@ -12,10 +13,10 @@ module.exports = [
         description: 'Édition IA V2 (Choix de modèle)',
         usage: '.editimgv2 <prompt> | [model]',
         execute: async (client, message, args) => {
-            const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage || message.message;
-            const hasMedia = Object.keys(quoted).find(key => key === 'imageMessage');
-            
-            if (!hasMedia) return client.sendMessage(message.key.remoteJid, { text: '> *ERREUR* : Répondez à une image.' });
+            const media = extractMedia(message);
+            if (!media || media.type !== 'imageMessage') {
+                return client.sendMessage(message.key.remoteJid, { text: '> *ERREUR* : Répondez à une image.' });
+            }
 
             const fullArgs = args.join(' ').split('|');
             const prompt = fullArgs[0]?.trim();
@@ -27,7 +28,7 @@ module.exports = [
 
             try {
                 // Upload l'image temporairement pour avoir une URL
-                const mediaMsg = { imageMessage: quoted.imageMessage };
+                const mediaMsg = { [media.type]: media.message };
                 const imageUrl = await uploadMedia(mediaMsg);
                 if (!imageUrl) throw new Error('Upload échoué');
 
@@ -56,10 +57,10 @@ module.exports = [
         description: 'Édition IA V1',
         usage: '.editimg <prompt>',
         execute: async (client, message, args) => {
-            const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage || message.message;
-            const hasMedia = Object.keys(quoted).find(key => key === 'imageMessage');
-            
-            if (!hasMedia) return client.sendMessage(message.key.remoteJid, { text: '> *ERREUR* : Répondez à une image.' });
+            const media = extractMedia(message);
+            if (!media || media.type !== 'imageMessage') {
+                return client.sendMessage(message.key.remoteJid, { text: '> *ERREUR* : Répondez à une image.' });
+            }
 
             const prompt = args.join(' ');
             if (!prompt) return client.sendMessage(message.key.remoteJid, { text: '> *ERREUR* : Prompt manquant.' });
@@ -67,7 +68,7 @@ module.exports = [
             await client.sendMessage(message.key.remoteJid, { react: { text: '⏳', key: message.key } });
 
             try {
-                const mediaMsg = { imageMessage: quoted.imageMessage };
+                const mediaMsg = { [media.type]: media.message };
                 const imageUrl = await uploadMedia(mediaMsg);
                 if (!imageUrl) throw new Error('Upload échoué');
 
@@ -93,15 +94,15 @@ module.exports = [
         description: 'Supprime l\'arrière-plan',
         usage: '.removebg (réponse image)',
         execute: async (client, message, args) => {
-            const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage || message.message;
-            const hasMedia = Object.keys(quoted).find(key => key === 'imageMessage');
-            
-            if (!hasMedia) return client.sendMessage(message.key.remoteJid, { text: '> *ERREUR* : Répondez à une image.' });
+            const media = extractMedia(message);
+            if (!media || media.type !== 'imageMessage') {
+                return client.sendMessage(message.key.remoteJid, { text: '> *ERREUR* : Répondez à une image.' });
+            }
 
             await client.sendMessage(message.key.remoteJid, { react: { text: '✂️', key: message.key } });
 
             try {
-                const mediaMsg = { imageMessage: quoted.imageMessage };
+                const mediaMsg = { [media.type]: media.message };
                 const imageUrl = await uploadMedia(mediaMsg);
                 if (!imageUrl) throw new Error('Upload échoué');
 

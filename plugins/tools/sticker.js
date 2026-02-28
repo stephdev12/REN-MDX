@@ -3,10 +3,10 @@
 
 const { downloadContentFromMessage } = require('gifted-baileys');
 const { t } = require('../../lib/language');
+const { extractMedia } = require('../../lib/utils');
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
-const { getRandom } = require('../../lib/functions'); // Il faudra créer cette fonction
 
 module.exports = {
     name: 'sticker',
@@ -17,16 +17,15 @@ module.exports = {
 
     execute: async (client, message, args) => {
         try {
-            const quoted = message.message?.extendedTextMessage?.contextInfo?.quotedMessage || message.message;
-            const mime = (quoted.imageMessage || quoted.videoMessage || quoted.stickerMessage)?.mimetype || '';
-            
-            if (!mime) return client.sendMessage(message.key.remoteJid, { text: t('tools.no_media') });
+            const media = extractMedia(message);
+            if (!media || !['imageMessage', 'videoMessage', 'stickerMessage'].includes(media.type)) {
+                return client.sendMessage(message.key.remoteJid, { text: t('tools.no_media') });
+            }
 
             await client.sendMessage(message.key.remoteJid, { react: { text: '⏳', key: message.key } });
 
             // Téléchargement
-            const type = Object.keys(quoted)[0].replace('Message', '');
-            const stream = await downloadContentFromMessage(quoted[Object.keys(quoted)[0]], type);
+            const stream = await downloadContentFromMessage(media.message, media.type.replace('Message', ''));
             let buffer = Buffer.from([]);
             for await (const chunk of stream) {
                 buffer = Buffer.concat([buffer, chunk]);
@@ -34,7 +33,7 @@ module.exports = {
 
             // Conversion FFMPEG "Manuelle" (Plus robuste sur les panels)
             const randomName = Math.floor(Math.random() * 10000);
-            const inputPath = path.join(__dirname, `../../temp/${randomName}.${mime.split('/')[1]}`);
+            const inputPath = path.join(__dirname, `../../temp/${randomName}.${media.mime.split('/')[1] || 'jpeg'}`);
             const outputPath = path.join(__dirname, `../../temp/${randomName}.webp`);
 
             if (!fs.existsSync(path.join(__dirname, '../../temp'))) fs.mkdirSync(path.join(__dirname, '../../temp'));
@@ -50,7 +49,7 @@ module.exports = {
             exec(ffmpegCmd, async (error) => {
                 if (error) {
                     console.error("FFMPEG Error:", error);
-                    fs.unlinkSync(inputPath); // Nettoyage
+                    try { fs.unlinkSync(inputPath); } catch (e) {}
                     return client.sendMessage(message.key.remoteJid, { text: t('tools.sticker_error') });
                 }
 
@@ -58,8 +57,10 @@ module.exports = {
                 await client.sendMessage(message.key.remoteJid, { sticker: stickerBuffer });
                 
                 // Nettoyage
-                fs.unlinkSync(inputPath);
-                fs.unlinkSync(outputPath);
+                try {
+                    fs.unlinkSync(inputPath);
+                    fs.unlinkSync(outputPath);
+                } catch (e) {}
             });
 
         } catch (error) {
