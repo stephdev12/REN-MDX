@@ -77,8 +77,12 @@ async function connectToWhatsApp() {
             console.log(chalk.yellow(`Connexion fermée (Code: ${statusCode}), Reconnexion: ${shouldReconnect}`));
             
             if (statusCode === DisconnectReason.loggedOut) {
-                console.log(chalk.red("⛔ Session invalide. Veuillez supprimer le dossier 'session' et scanner à nouveau."));
-                // Optionnel : fs.rmSync(config.sessionName, { recursive: true, force: true });
+                console.log(chalk.red("⛔ Session invalide. Nettoyage du dossier 'session' et arrêt."));
+                try {
+                    fs.rmSync(config.sessionName, { recursive: true, force: true });
+                } catch (e) {
+                    console.log(chalk.red("Erreur lors du nettoyage de la session:", e.message));
+                }
                 process.exit(1);
             }
 
