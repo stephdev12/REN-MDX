@@ -126,5 +126,46 @@ module.exports = [
                 client.sendMessage(message.key.remoteJid, { text: '> *ERREUR* : Infos introuvables.' }, { quoted: message });
             }
         }
+    },
+    {
+        name: 'komiku',
+        aliases: ['manga', 'komik'],
+        category: 'anime',
+        description: 'Recherche de mangas sur Komiku',
+        usage: '.komiku <recherche>',
+
+        execute: async (client, message, args) => {
+            try {
+                const query = args.join(' ');
+                if (!query) return client.sendMessage(message.key.remoteJid, { text: '> *ERREUR* : Recherche manquante.' }, { quoted: message });
+
+                await client.sendMessage(message.key.remoteJid, { react: { text: '📚', key: message.key } });
+
+                const apiUrl = `https://api.giftedtech.co.ke/api/anime/komiku?apikey=${API_KEY}&query=${encodeURIComponent(query)}&type=manga`;
+                const { data } = await axios.get(apiUrl);
+                
+                if (!data.success || !data.result || data.result.length === 0) throw new Error('API Error');
+
+                // On prend les 3 premiers résultats pour ne pas spammer
+                const mangas = data.result.slice(0, 3);
+                
+                for (const manga of mangas) {
+                    let caption = `> *KOMIKU SEARCH*\n\n`;
+                    caption += `*Titre* : ${manga.title}\n`;
+                    caption += `*Genre* : ${manga.genre}\n`;
+                    caption += `*Description* : ${manga.description}\n`;
+                    caption += `🔗 ${manga.url}`;
+
+                    await client.sendMessage(message.key.remoteJid, { 
+                        image: { url: manga.img },
+                        caption: caption
+                    }, { quoted: message });
+                }
+
+            } catch (error) {
+                console.error("Komiku Error:", error.message);
+                client.sendMessage(message.key.remoteJid, { text: '> *ERREUR* : Infos introuvables.' }, { quoted: message });
+            }
+        }
     }
 ];
