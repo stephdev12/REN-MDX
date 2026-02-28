@@ -85,7 +85,12 @@
   },
   "ai": {
     "no_query": "> *ERREUR* : Posez une question.",
-    "error": "> *ERREUR* : IA indisponible."
+    "error": "> *ERREUR* : IA indisponible.",
+    "chatbot_menu": "*CHOISIS TON MODE*\n\n➠ 1- Private chat only\n➠ 2- Group only\n➠ 3- Both\n➠ 4- Off",
+    "chatbot_mode_private": "> *CHATBOT* : Activé (Privé uniquement)",
+    "chatbot_mode_group": "> *CHATBOT* : Activé (Groupe uniquement)",
+    "chatbot_mode_both": "> *CHATBOT* : Activé (Privé & Groupe)",
+    "chatbot_mode_off": "> *CHATBOT* : Désactivé"
   },
   "tools": {
     "no_media": "> *ERREUR* : Répondez à un média.",

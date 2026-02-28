@@ -82,9 +82,7 @@ async function messageHandler(sock, m) {
             senderNum = normalizeJid(sender);
         }
         
-        console.log(`[DEBUG STORE] Sender: ${senderNum} | Chat: ${chatId}`);
         const pendingRequest = getRequest(senderNum, chatId);
-        console.log(`[DEBUG STORE] Result:`, pendingRequest ? "TROUVÉ" : "NULL");
 
         if (pendingRequest) {
             // Si c'est une nouvelle commande (commence par .), on annule la requête en cours
@@ -103,8 +101,60 @@ async function messageHandler(sock, m) {
             }
         }
 
-        // --- 2. GESTION DES COMMANDES CLASSIQUES ---
+        // --- 1.5. GESTION DU CHATBOT IA ---
         const settings = getSettings();
+        const chatbotMode = settings.chatbotMode || 'off';
+
+        if (chatbotMode !== 'off' && !message.key.fromMe) {
+            const isPrivate = !isGroup;
+            let shouldReply = false;
+
+            // Déterminer si le chatbot doit s'activer
+            if (chatbotMode === 'both') {
+                shouldReply = true;
+            } else if (chatbotMode === 'private' && isPrivate) {
+                shouldReply = true;
+            } else if (chatbotMode === 'group' && isGroup) {
+                shouldReply = true;
+            }
+
+            // Dans un groupe, on veut peut-être qu'il ne réponde QUE si on le mentionne ou on lui répond
+            if (shouldReply && isGroup) {
+                const quotedParticipant = message.message?.extendedTextMessage?.contextInfo?.participant;
+                const botId = normalizeJid(sock.user?.id || "") + "@s.whatsapp.net";
+                
+                // Si ce n'est pas une réponse au bot et pas de mention au bot, on ignore pour éviter le spam
+                if (quotedParticipant !== botId && !body.includes("@" + botId.split('@')[0])) {
+                    shouldReply = false;
+                }
+            }
+
+            // Si le message n'est pas une commande, on envoie à l'IA
+            const prefix = settings.prefix || config.prefix;
+            if (shouldReply && body && !body.startsWith(prefix)) {
+                // On importe l'API IA dynamiquement pour ne pas bloquer le handler
+                const axios = require('axios');
+                const API_KEY = 'gifted';
+                const prompt = "Tu es REN-MDX, un bot WhatsApp ultra-performant créé par SEN STUDIO. Tu es serviable, rapide et tu aimes la technologie.";
+                
+                // On met l'état en écriture
+                await sock.sendPresenceUpdate('composing', chatId);
+                
+                try {
+                    const { data } = await axios.get(`https://api.giftedtech.co.ke/api/ai/custom?apikey=${API_KEY}&q=${encodeURIComponent(body)}&prompt=${encodeURIComponent(prompt)}`);
+                    if (data && data.success && data.result) {
+                        await sock.sendMessage(chatId, { text: data.result }, { quoted: message });
+                    }
+                } catch (e) {
+                    console.error("Erreur Chatbot Auto:", e.message);
+                }
+                
+                await sock.sendPresenceUpdate('paused', chatId);
+                return; // On arrête l'exécution ici car le chatbot a répondu
+            }
+        }
+
+        // --- 2. GESTION DES COMMANDES CLASSIQUES ---
         const prefix = settings.prefix || config.prefix;
 
         if (!body.startsWith(prefix)) return;
